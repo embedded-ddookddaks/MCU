@@ -90,10 +90,13 @@ void Drive_Arcade_DirPwm(int16_t throttle, int16_t steer){
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance == USART1) {
+
     //HAL_UART_Transmit(&huart1, (uint8_t*)&rx1, 1, 10); // 에코백
 
     //if(rx1==3) HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);       // ★ LED 토글
     //HAL_UART_Receive_IT(&huart1, (uint8_t*)&rx1, 1);   // 다음 바이트 재개
+
+
   }
 }
 /* USER CODE END 0 */
