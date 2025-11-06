@@ -1,3 +1,4 @@
+
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
@@ -18,7 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-
+#include "motor_driver.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -40,9 +41,11 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim3;
+
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
-static volatile uint8_t rx1;
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -52,7 +55,31 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
+
+extern TIM_HandleTypeDef htim3; // 예: TIM3_CH1=PWM1, CH2=PWM2 (20 kHz 권장)
+
+DirPwmMotor motorL; // DIR1/PWM1
+DirPwmMotor motorR; // DIR2/PWM2
+
+static inline int16_t clamp1000(int v){ if(v>1000) return 1000; if(v<-1000) return -1000; return (int16_t)v; }
+
+static void Motors_Test_DirPwm(void){
+    for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
+    for(int s=0; s>=-1000; s-=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
+    // 제자리 회전
+    for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, +s); DirPwm_SetSpeed(&motorR, -s); HAL_Delay(10);} HAL_Delay(150);
+    DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
+}
+
+// 아케이드 드라이브(throttle/steer)
+void Drive_Arcade_DirPwm(int16_t throttle, int16_t steer){
+    int l = throttle + steer; int r = throttle - steer;
+    l = clamp1000(l); r = clamp1000(r);
+    DirPwm_SetSpeed(&motorL, l);
+    DirPwm_SetSpeed(&motorR, r);
+}
 
 
 /* USER CODE END PFP */
@@ -63,9 +90,10 @@ static void MX_USART1_UART_Init(void);
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance == USART1) {
-    HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);       // ★ LED 토글
-    HAL_UART_Transmit(&huart1, (uint8_t*)&rx1, 1, 10); // 에코백
-    HAL_UART_Receive_IT(&huart1, (uint8_t*)&rx1, 1);   // 다음 바이트 재개
+    //HAL_UART_Transmit(&huart1, (uint8_t*)&rx1, 1, 10); // 에코백
+
+    //if(rx1==3) HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);       // ★ LED 토글
+    //HAL_UART_Receive_IT(&huart1, (uint8_t*)&rx1, 1);   // 다음 바이트 재개
   }
 }
 /* USER CODE END 0 */
@@ -101,7 +129,11 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
+  MX_TIM3_Init();
+  DirPwm_Init(&motorL, &htim3, TIM_CHANNEL_1, GPIOB, GPIO_PIN_12, 0); // DIR1=PB12
+  DirPwm_Init(&motorR, &htim3, TIM_CHANNEL_2, GPIOB, GPIO_PIN_13, 1); // DIR2=PB13, 반대면 invert 0/1 교체
   /* USER CODE BEGIN 2 */
+  Motors_Test_DirPwm();
   uint8_t c;
   static volatile uint8_t rx1;
   //HAL_UART_Receive_IT(&huart1, &rx_byte, 1); // 1바이트 인터럽트 수신 시작
@@ -164,6 +196,59 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 65535;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
+
 }
 
 /**
@@ -253,6 +338,9 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, DIR1_Pin|DIR2_Pin, GPIO_PIN_RESET);
+
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
@@ -265,6 +353,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : DIR1_Pin DIR2_Pin */
+  GPIO_InitStruct.Pin = DIR1_Pin|DIR2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
