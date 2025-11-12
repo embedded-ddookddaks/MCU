@@ -59,7 +59,7 @@ static void MX_TIM3_Init(void);
 
 extern TIM_HandleTypeDef htim3; // 예: TIM3_CH1=PWM1, CH2=PWM2 (20 kHz 권장)
 
-int test = 0;
+int test = 4;
 static volatile uint8_t rx1;
 
 DirPwmMotor motorL; // DIR1/PWM1
@@ -68,11 +68,12 @@ DirPwmMotor motorR; // DIR2/PWM2
 static inline int16_t clamp1000(int v){ if(v>1000) return 1000; if(v<-1000) return -1000; return (int16_t)v; }
 
 static void Motors_Move_Front(void){
-    for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
+    //for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
     //for(int s=0; s>=-1000; s-=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
     // 제자리 회전
     //for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, +s); DirPwm_SetSpeed(&motorR, -s); HAL_Delay(10);} HAL_Delay(150);
-    DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
+	DirPwm_SetSpeed(&motorL, 1000); DirPwm_SetSpeed(&motorR, 1000);
+    //DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
 }
 
 static void Motors_Move_Back(void){
@@ -81,6 +82,16 @@ static void Motors_Move_Back(void){
     // 제자리 회전
     //for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, +s); DirPwm_SetSpeed(&motorR, -s); HAL_Delay(10);} HAL_Delay(150);
     DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
+}
+
+static void Turn_Left(void){
+	for(int s=0; s<=5000; s+=100){ DirPwm_SetSpeed(&motorL, +s); DirPwm_SetSpeed(&motorR, -s); HAL_Delay(10);} HAL_Delay(150);
+	DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
+}
+
+static void Turn_right(void){
+	for(int s=0; s<=5000; s+=100){ DirPwm_SetSpeed(&motorL, -s); DirPwm_SetSpeed(&motorR, +s); HAL_Delay(10);} HAL_Delay(150);
+	DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
 }
 
 static void Motors_Stop(void){
@@ -113,7 +124,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance == USART1) {
     HAL_UART_Transmit(&huart1, (uint8_t*)&rx1, 1, 10); // 에코백
-    test = 1;
+    test = rx1;
     HAL_UART_Receive_IT(&huart1, (uint8_t*)&rx1, 1);   // 다음 바이트 재개
   }
 }
@@ -123,6 +134,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   * @brief  The application entry point.
   * @retval int
   */
+
+void test_func(void){
+	Motors_Move_Front();
+	HAL_Delay(200);
+	Motors_Stop();
+}
+
 int main(void)
 {
 
@@ -151,26 +169,40 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   MX_TIM3_Init();
-  DirPwm_Init(&motorL, &htim3, TIM_CHANNEL_1, GPIOB, GPIO_PIN_12, 0); // DIR1=PB12
-  DirPwm_Init(&motorR, &htim3, TIM_CHANNEL_2, GPIOB, GPIO_PIN_13, 1); // DIR2=PB13, 반대면 invert 0/1 교체
+  DirPwm_Init(&motorL, &htim3, TIM_CHANNEL_1, GPIOB, GPIO_PIN_12, 1); // DIR1=PB12
+  DirPwm_Init(&motorR, &htim3, TIM_CHANNEL_2, GPIOB, GPIO_PIN_13, 0); // DIR2=PB13, 반대면 invert 0/1 교체
   /* USER CODE BEGIN 2 */
   uint8_t c;
   //static volatile uint8_t rx1;
   //HAL_UART_Receive_IT(&huart1, &rx_byte, 1); // 1바이트 인터럽트 수신 시작
   HAL_UART_Receive_IT(&huart1, (uint8_t*)&rx1, 1);
   /* USER CODE END 2 */
-  Motors_Test_DirPwm();
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
     /* USER CODE END WHILE */
-	  if(test==0) continue;
+	  if(test==4) continue;
 	  switch(test){
+	  case 0:
+		  Motors_Stop();
+		  test = 4;
+		  break;
+	  case 3:
+		  Motors_Move_Front();
+		  test = 4;
+		  break;
 	  case 1:
-		  Motors_Test_DirPwm();
-		  HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);       // ★ LED 토글
-		  test = 0;
+		  Turn_right();
+		  test=4;
+		  break;
+	  case 2:
+		  Turn_Left();
+		  test = 4;
+		  break;
+	  default:
+		  test=4;
+		  break;
 	  }
     /* USER CODE BEGIN 3 */
   }
