@@ -11,7 +11,8 @@
   *
   * This software is licensed under terms that can be found in the LICENSE file
   * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * If no LICENSE file comes with this software, it is prov
+  * ided AS-IS.
   *
   ******************************************************************************
   */
@@ -59,7 +60,7 @@ static void MX_TIM3_Init(void);
 
 extern TIM_HandleTypeDef htim3; // 예: TIM3_CH1=PWM1, CH2=PWM2 (20 kHz 권장)
 
-int test = 4;
+int state = 4;
 static volatile uint8_t rx1;
 
 DirPwmMotor motorL; // DIR1/PWM1
@@ -72,16 +73,13 @@ static void Motors_Move_Front(void){
     //for(int s=0; s>=-1000; s-=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
     // 제자리 회전
     //for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, +s); DirPwm_SetSpeed(&motorR, -s); HAL_Delay(10);} HAL_Delay(150);
-	DirPwm_SetSpeed(&motorL, 1000); DirPwm_SetSpeed(&motorR, 1000);
+	DirPwm_SetSpeed(&motorL, 500); DirPwm_SetSpeed(&motorR, 500);
     //DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
 }
 
 static void Motors_Move_Back(void){
-    //for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
-    for(int s=0; s>=-1000; s-=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
-    // 제자리 회전
-    //for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, +s); DirPwm_SetSpeed(&motorR, -s); HAL_Delay(10);} HAL_Delay(150);
-    DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
+	DirPwm_SetSpeed(&motorL,-500); DirPwm_SetSpeed(&motorR, -500);
+
 }
 
 static void Turn_Left(void){
@@ -115,6 +113,7 @@ void Drive_Arcade_DirPwm(int16_t throttle, int16_t steer){
 }
 
 
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -124,7 +123,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance == USART1) {
     HAL_UART_Transmit(&huart1, (uint8_t*)&rx1, 1, 10); // 에코백
-    test = rx1;
+    state = rx1;
     HAL_UART_Receive_IT(&huart1, (uint8_t*)&rx1, 1);   // 다음 바이트 재개
   }
 }
@@ -182,26 +181,29 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  if(test==4) continue;
-	  switch(test){
+	  if(state==4) continue;
+	  switch(state){
 	  case 0:
-		  Motors_Stop();
-		  test = 4;
+		  Motors_Move_Back();
+		  state = 4;
 		  break;
 	  case 3:
 		  Motors_Move_Front();
-		  test = 4;
+		  state = 4;
 		  break;
 	  case 1:
 		  Turn_right();
-		  test=4;
+		  state=4;
 		  break;
 	  case 2:
 		  Turn_Left();
-		  test = 4;
+		  state = 4;
 		  break;
+	  case 7:
+		  Motors_Stop();
+		  state = 4;
 	  default:
-		  test=4;
+		  state=4;
 		  break;
 	  }
     /* USER CODE BEGIN 3 */
