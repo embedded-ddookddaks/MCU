@@ -57,7 +57,7 @@ UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 static volatile data rx;
-int state = 5;
+int state = WAIT;
 
 int speedL = 0;
 int speedR = 0;
