@@ -31,12 +31,18 @@ typedef struct {
 	int command;
 	float left;
 	float right;
-} weight;
+} data;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define MOVE_BACK 0
+#define TURN_RIGHT 1
+#define TURN_LEFT 2
+#define MOVE_FRONT 3
+#define PURE_PURSUIT 4
+#define WAIT 5
+#define STOP 7
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -50,9 +56,8 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
-static volatile weight rx;
-int state = 5;
-static volatile uint8_t rx1;
+static volatile data rx;
+int state = WAIT;
 
 int speedL = 0;
 int speedR = 0;
@@ -74,8 +79,6 @@ static void MX_TIM3_Init(void);
 
 extern TIM_HandleTypeDef htim3; // 예: TIM3_CH1=PWM1, CH2=PWM2 (20 kHz 권장)
 
-
-
 static inline int16_t clamp1000(int v){ if(v>1000) return 1000; if(v<-1000) return -1000; return (int16_t)v; }
 
 static void Motors_Move_Front(void){
@@ -94,7 +97,7 @@ static void Turn_Left(void){
 	DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
 }
 
-static void Turn_right(void){
+static void Turn_Right(void){
 	for(int s=0; s<=5000; s+=100){ DirPwm_SetSpeed(&motorL, -s); DirPwm_SetSpeed(&motorR, +s); HAL_Delay(10);} HAL_Delay(150);
 	speedL = 0; speedR = 0;
 	DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
@@ -105,24 +108,6 @@ static void Motors_Stop(void){
     DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
 }
 
-static void Motors_Test_DirPwm(void){
-    for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
-    for(int s=0; s>=-1000; s-=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
-    // 제자리 회전
-    for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, +s); DirPwm_SetSpeed(&motorR, -s); HAL_Delay(10);} HAL_Delay(150);
-    DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
-}
-
-// 아케이드 드라이브(throttle/steer)
-void Drive_Arcade_DirPwm(int16_t throttle, int16_t steer){
-    int l = throttle + steer; int r = throttle - steer;
-    l = clamp1000(l); r = clamp1000(r);
-    DirPwm_SetSpeed(&motorL, l);
-    DirPwm_SetSpeed(&motorR, r);
-}
-
-
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -131,28 +116,18 @@ void Drive_Arcade_DirPwm(int16_t throttle, int16_t steer){
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance == USART1) {
-	  //HAL_UART_Transmit(&huart1, (uint8_t *)&rx.command, sizeof(int), 10);
-	  state = 0;
+	  state = rx.command;
 	  HAL_UART_Receive_IT(&huart1, (uint8_t *)&rx, sizeof(rx));
-	  /*
-    HAL_UART_Transmit(&huart1, (uint8_t*)&rx1, 1, 10); // 에코백
-    state = rx1;
-    HAL_UART_Receive_IT(&huart1, (uint8_t*)&rx1, 1);   // 다음 바이트 재개
-    */
+	  HAL_UART_Transmit(&huart1, (uint8_t*)&rx, 1, 10); // 에코백
   }
 }
+
 /* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.
   * @retval int
   */
-
-void test_func(void){
-	Motors_Move_Front();
-	HAL_Delay(200);
-	Motors_Stop();
-}
 
 int main(void)
 {
@@ -179,7 +154,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   MX_TIM3_Init();
   DirPwm_Init(&motorL, &htim3, TIM_CHANNEL_1, GPIOB, GPIO_PIN_12, 1); // DIR1=PB12
@@ -191,36 +165,36 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
-	  if(state==5) continue;
-	  switch(rx.command){
-  	  	  case 0:
+	  if(state==WAIT) continue;
+	  switch(state){
+  	  	  case STOP:
+  	  		  Motors_Stop();
+  	  		  break;
+  	  	  case MOVE_BACK:
   	  		  Motors_Move_Back();
   	  		  break;
-  	  	  case 1:
-  			  Turn_right();
+  	  	  case TURN_RIGHT:
+  			  Turn_Right();
   			  break;
-  	  	  case 2:
+  	  	  case TURN_LEFT:
   			  Turn_Left();
   			  break;
-  	  	  case 3:
+  	  	  case MOVE_FRONT:
   			  Motors_Move_Front();
   			  break;
-	  	  case 4:
+	  	  case PURE_PURSUIT:
 	  		  speedL *= rx.left;
 			  speedR *= rx.right;
 			  DirPwm_SetSpeed(&motorL, speedL);
 			  DirPwm_SetSpeed(&motorR, speedR);
 			  break;
-	  	  case 7:
-	  		  Motors_Stop();
-	  		  break;
 	  	  default:
 	  		  break;
 	  }
-	  state = 5;
-    /* USER CODE BEGIN 3 */
+	  state = WAIT;
   }
+   /* USER CODE END WHILE */
+	/* USER CODE BEGIN 3 */
   /* USER CODE END 3 */
 }
 
