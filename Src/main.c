@@ -105,24 +105,6 @@ static void Motors_Stop(void){
     DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
 }
 
-static void Motors_Test_DirPwm(void){
-    for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
-    for(int s=0; s>=-1000; s-=50){ DirPwm_SetSpeed(&motorL, s); DirPwm_SetSpeed(&motorR, s); HAL_Delay(10);} HAL_Delay(150);
-    // 제자리 회전
-    for(int s=0; s<=1000; s+=50){ DirPwm_SetSpeed(&motorL, +s); DirPwm_SetSpeed(&motorR, -s); HAL_Delay(10);} HAL_Delay(150);
-    DirPwm_Coast(&motorL); DirPwm_Coast(&motorR); HAL_Delay(200);
-}
-
-// 아케이드 드라이브(throttle/steer)
-void Drive_Arcade_DirPwm(int16_t throttle, int16_t steer){
-    int l = throttle + steer; int r = throttle - steer;
-    l = clamp1000(l); r = clamp1000(r);
-    DirPwm_SetSpeed(&motorL, l);
-    DirPwm_SetSpeed(&motorR, r);
-}
-
-
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -131,28 +113,18 @@ void Drive_Arcade_DirPwm(int16_t throttle, int16_t steer){
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance == USART1) {
-	  //HAL_UART_Transmit(&huart1, (uint8_t *)&rx.command, sizeof(int), 10);
-	  state = 0;
+	  state = rx.command;
 	  HAL_UART_Receive_IT(&huart1, (uint8_t *)&rx, sizeof(rx));
-	  /*
-    HAL_UART_Transmit(&huart1, (uint8_t*)&rx1, 1, 10); // 에코백
-    state = rx1;
-    HAL_UART_Receive_IT(&huart1, (uint8_t*)&rx1, 1);   // 다음 바이트 재개
-    */
+	  HAL_UART_Transmit(&huart1, (uint8_t*)&rx1, 1, 10); // 에코백
   }
 }
+
 /* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.
   * @retval int
   */
-
-void test_func(void){
-	Motors_Move_Front();
-	HAL_Delay(200);
-	Motors_Stop();
-}
 
 int main(void)
 {
